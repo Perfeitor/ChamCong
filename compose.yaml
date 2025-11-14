@@ -5,3 +5,9 @@
       context: .
       dockerfile: ChamCong/Dockerfile
 
+  apiserver:
+    image: apiserver
+    build:
+      context: .
+      dockerfile: ApiServer/Dockerfile
+

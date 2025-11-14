@@ -2,5 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path="compose.yaml" />
   </Folder>
+  <Project Path="ApiServer/ApiServer.csproj" />
   <Project Path="ChamCong/ChamCong.csproj" />
+  <Project Path="Shared/Shared.csproj" />
 </Solution>

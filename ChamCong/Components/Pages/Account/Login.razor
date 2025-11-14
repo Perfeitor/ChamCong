@@ -1,0 +1,104 @@
+﻿@page "/login"
+@using System.ComponentModel.DataAnnotations
+@using Shared.Models.WebModels
+@inject NavigationManager Navigation
+@inject IAuthService AuthService
+@inject MudBlazor.ISnackbar Snackbar
+
+<style>
+
+    .factory-button-large {
+        min-width: 180px;
+        height: 60px;
+        font-size: 20px;
+        font-weight: 600;
+        border-radius: 10px;
+    }
+
+    @@media (max-width: 480px) {
+        .mud-button-large {
+            min-width: 120px;
+            height: 52px;
+        }
+    }
+</style>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex justify-center align-center" Style="height:100vh;">
+    <MudPaper Elevation="10" Class="pa-8 text-center"
+              Style="width:460px; border-radius:12px; background:#f6f8fa; border:1px solid #d0d4d9;">
+        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:700; color:#1a1a1a;">Cổng vào nhà máy</MudText>
+        <MudText Typo="Typo.subtitle1" Class="mb-5" Style="color:#4b5563; font-size:18px;">Nhập mã nhân viên hoặc quét
+            thẻ
+        </MudText>
+
+        <EditForm Model="_request" OnValidSubmit="HandleValidSubmit">
+            <DataAnnotationsValidator/>
+
+            <MudTextField @bind-Value="_request.WorkerId"
+                          Label="Mã nhân viên / Mã thẻ"
+                          Placeholder="Ví dụ: 123456"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Badge"
+                          Immediate="true"
+                          Required="true"
+                          Class="mb-3"
+                          Style="font-size:22px; height:62px; background:#fff; border:1px solid #b6bbc2;"/>
+
+            <MudStack Direction="Row" Spacing="2" Justify="Justify.SpaceBetween">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@isProcessing" Type="Submit"
+                           Class="factory-button-large">
+                    <MudText Typo="Typo.button">Vào làm</MudText>
+                </MudButton>
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="StartQrScan"
+                           Class="mud-button-large">
+                    <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner"/>&nbsp;Quét QR
+                </MudButton>
+            </MudStack>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <MudText Color="Color.Error" Class="mt-3">@errorMessage</MudText>
+            }
+        </EditForm>
+
+        <MudDivider Class="my-4"/>
+        <MudText Typo="Typo.caption">Chế độ kiosk: để thiết bị ở chế độ quét tự động (nếu có đầu đọc thẻ)</MudText>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private LoginRequest _request = new();
+    private bool isProcessing = false;
+    private string? errorMessage;
+
+    private async Task HandleValidSubmit()
+    {
+        isProcessing = true;
+        errorMessage = null;
+        try
+        {
+            var result = await AuthService.LoginFactoryAsync(_request.WorkerId);
+            if (result.Succeeded)
+            {
+                Snackbar.Add("Đăng nhập thành công", Severity.Success);
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage ?? "Mã không hợp lệ. Vui lòng thử lại.";
+                Snackbar.Add(errorMessage, Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Lỗi hệ thống: " + ex.Message;
+            Snackbar.Add(errorMessage, Severity.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}
+
