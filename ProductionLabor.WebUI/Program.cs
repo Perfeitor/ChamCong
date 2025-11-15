@@ -1,5 +1,5 @@
-using ChamCong.Components;
 using MudBlazor.Services;
+using ProductionLabor.WebUI.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 

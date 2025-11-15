@@ -3,6 +3,6 @@
     <File Path="compose.yaml" />
   </Folder>
   <Project Path="ApiServer/ApiServer.csproj" />
-  <Project Path="ChamCong/ChamCong.csproj" />
+  <Project Path="ProductionLabor.WebUI/ProductionLabor.WebUI.csproj" />
   <Project Path="Shared/Shared.csproj" />
 </Solution>
