@@ -23,7 +23,12 @@ public class AuthService : IAuthService
             throw;
         }
     }
-    
+
+    public Task<AuthToken> GenerateJwtToken(LoginRequest loginRequest)
+    {
+        throw new NotImplementedException();
+    }
+
     public async Task<bool> LoginAsync(LoginRequest loginRequest)
     {
         try

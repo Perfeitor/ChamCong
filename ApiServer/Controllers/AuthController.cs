@@ -11,11 +11,13 @@ public class AuthController : ControllerBase
 {
     private IAuthService _authService;
     private UserManager<IdentityUser> _userManager;
+    private IConfiguration _configuration;
     
-    public AuthController(IAuthService authService, UserManager<IdentityUser> userManager)
+    public AuthController(IAuthService authService, UserManager<IdentityUser> userManager, IConfiguration configuration)
     {
         _authService = authService;
         _userManager = userManager;
+        _configuration = configuration;
     }
     
     [HttpPost("register")]
@@ -41,11 +43,31 @@ public class AuthController : ControllerBase
             var result = await _authService.LoginAsync(loginRequest);
             if (result)
             {
-                return Ok("Login successful");
+                var token = await _authService.GenerateJwtToken(loginRequest);
+                var domain = _configuration.GetValue<string>("Jwt:Domain");
+                var refreshTokenExpriresTime = loginRequest.RememberMe ? token.RefreshToken.LifetimeExpiresAt : (DateTimeOffset?)null;
+                var accessTokenExpriresTime = loginRequest.RememberMe ? token.RefreshToken.CreatedAt.AddMinutes(_configuration.GetValue<int>("AccessTokenExpireMinutes")) : (DateTimeOffset?)null;
+                Response.Cookies.Append("access_token", token.AccessToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Domain = domain,
+                    Secure = true,
+                    Expires = accessTokenExpriresTime,
+                    SameSite = SameSiteMode.None
+                });
+                Response.Cookies.Append("refresh_token", token.RefreshToken.Token, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Domain = domain,
+                    Secure = true,
+                    Expires = refreshTokenExpriresTime,
+                    SameSite = SameSiteMode.Lax
+                });
+                return Ok();
             }
             else
             {
-                return Unauthorized("Invalid credentials");
+                return Unauthorized("Invalid login information");
             }
         }
         catch (Exception e)
