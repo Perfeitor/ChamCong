@@ -12,7 +12,7 @@ public class AuthController : ControllerBase
     private IAuthService _authService;
     private UserManager<IdentityUser> _userManager;
     private IConfiguration _configuration;
-    private UserManagerAddon _userManagerAddon;
+    private readonly UserManagerAddon _userManagerAddon;
 
     public AuthController(IAuthService authService, UserManager<IdentityUser> userManager, IConfiguration configuration, UserManagerAddon userManagerAddon)
     {
@@ -33,7 +33,7 @@ public class AuthController : ControllerBase
         catch (Exception e)
         {
             Console.WriteLine(e);
-            throw;
+            return StatusCode(500, "An error occurred while registering the user");
         }
     }
     
@@ -48,12 +48,12 @@ public class AuthController : ControllerBase
                 var user = await _userManagerAddon.FindUserByPhoneOrUsernameOrIdAsync(loginRequest.Username);
                 if (user == null)
                 {
-                    return BadRequest();
+                    return BadRequest("User not found");
                 }
                 var token = await _authService.GenerateToken(user.Id);
                 if (token?.AccessToken == null || token?.RefreshToken == null)
                 {
-                    return BadRequest();
+                    return BadRequest("Failed to generate tokens");
                 }
                 var domain = _configuration.GetValue<string>("Jwt:Domain");
                 var refreshTokenExpriresTime = loginRequest.RememberMe ? token.RefreshToken.LifetimeExpiresAt : (DateTimeOffset?)null;
@@ -84,7 +84,7 @@ public class AuthController : ControllerBase
         catch (Exception e)
         {
             await Console.Error.WriteLineAsync(e.Message);
-            return StatusCode(500, e.Message);
+            return StatusCode(500, "An error occurred while logging in");
         }
     }
 
@@ -110,9 +110,9 @@ public class AuthController : ControllerBase
             }
             
             var newToken = await _authService.RotateToken(refreshToken);
-            if (newToken == null)
+            if (newToken == null || newToken.AccessToken == null || newToken.RefreshToken == null)
             {
-                return BadRequest();
+                return BadRequest("Failed to refresh token");
             }
 
             var domain = _configuration.GetValue<string>("Jwt:Domain");
@@ -139,10 +139,20 @@ public class AuthController : ControllerBase
 
             return Ok();
         }
+        catch (ArgumentException e)
+        {
+            await Console.Error.WriteLineAsync(e.Message);
+            return BadRequest("Tham số không hợp lệ.");
+        }
+        catch (InvalidOperationException e)
+        {
+            await Console.Error.WriteLineAsync(e.Message);
+            return BadRequest("Không thể thực hiện thao tác này.");
+        }
         catch (Exception e)
         {
             await Console.Error.WriteLineAsync(e.Message);
-            return StatusCode(500, e.Message);
+            return StatusCode(500, "An error occurred while refreshing the token");
         }
     }
 }
