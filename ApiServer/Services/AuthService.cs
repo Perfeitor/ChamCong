@@ -1,5 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using ApiServer.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -78,53 +79,93 @@ public class AuthService : IAuthService
         
         return refreshToken;
     }
-    
-    private async Task<RefreshToken?> RotateRefreshToken(string refreshTokenId, IdentityUser user)
+
+    public async Task<AuthToken?> RotateToken(string refreshTokenId)
     {
-        var token = _dbContext.RefreshTokens.Where(token => token.UserId == user.Id && token.Token == refreshTokenId && !token.IsInactive)
+        var token = _dbContext.RefreshTokens.Where(token => token.Token == refreshTokenId && !token.IsInactive)
             .OrderByDescending(token => token.Token)
             .FirstOrDefault();
         if (token == null)
         {
             return null;
         }
-        var newRefreshToken = await CreateRefreshToken(user, token.LifetimeExpiresAt);
-        return newRefreshToken;
-    }
-    
-    private string GenerateJwtAccessToken(IdentityUser user)
-    {
-        var claims = new[]
+        var user = await _userManager.FindByIdAsync(token.UserId);
+        if (user == null)
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Name, user.UserName!)
-        };
-        var jwtKey = _configuration.GetValue<string>("Jwt:Key")
-                     ?? throw new InvalidOperationException("Jwt:Key is missing!");
-        var key = new SymmetricSecurityKey(UTF8.GetBytes(jwtKey));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512);
-
-        var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration.GetValue<string>("Jwt:Audience"),
-            claims: claims,
-            expires: DateTime.Now.AddMinutes(_configuration.GetValue<int>("Jwt:ExpireMinutes")),
-            signingCredentials: creds
-        );
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
+            return null;
+        }
+        var newRefreshToken = await CreateRefreshToken(user, token.LifetimeExpiresAt);
+        var newAccessToken = await GenerateJwtAccessToken(user.Id);
+        return new AuthToken(newAccessToken, newRefreshToken);
     }
+
+    public ClaimsPrincipal? ValidateJwtToken(string token)
+    {
+        var jwtKey = _configuration.GetValue<string>("Jwt:Key")
+                     ?? throw new InvalidOperationException("Jwt:Key missing!");
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = UTF8.GetBytes(jwtKey);
+
+        try
+        {
+            var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = _configuration["Jwt:Issuer"],
+
+                ValidateAudience = true,
+                ValidAudience = _configuration["Jwt:Audience"],
+
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(key),
+
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            }, out _);
+
+            return principal; // principal.Identity.Name, principal.Claims...
+        }
+        catch
+        {
+            return null; // token sai hoặc hết hạn
+        }
+    }
+
+    private async Task<string> GenerateJwtAccessToken(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            var claims = new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user!.Id),
+                new Claim(ClaimTypes.Name, user.UserName!)
+            };
+            var jwtKey = _configuration.GetValue<string>("Jwt:Key")
+                         ?? throw new InvalidOperationException("Jwt:Key is missing!");
+            var key = new SymmetricSecurityKey(UTF8.GetBytes(jwtKey));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512);
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration.GetValue<string>("Jwt:Audience"),
+                claims: claims,
+                expires: DateTime.Now.AddMinutes(_configuration.GetValue<int>("Jwt:ExpireMinutes")),
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
     
-    public async Task<AuthToken> GenerateJwtToken(LoginRequest loginRequest)
+    public async Task<AuthToken?> GenerateToken(string userId)
     {
         var now = DateTimeOffset.UtcNow;
-        var user = await _userManager.FindByNameAsync(loginRequest.Username);
+        var user = await _userManager.FindByIdAsync(userId);
         if (user == null)
         {
             throw new InvalidOperationException("User not found");
         }
         
-        var accessToken = GenerateJwtAccessToken(user);
+        var accessToken = await GenerateJwtAccessToken(user.Id);
         var refreshToken = await CreateRefreshToken(user);
         
         var oldRefreshTokens = await _dbContext.RefreshTokens.Where(token => token.UserId == user.Id && token.LifetimeExpiresAt > now && token.CurrentExpiresAt > now && token.RevokedAt != null).OrderByDescending(token => token.Token).ToListAsync();
@@ -145,11 +186,7 @@ public class AuthService : IAuthService
                 } 
             }
         }
-        
-        return new AuthToken
-        {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken
-        };
+
+        return new AuthToken(accessToken, refreshToken);
     }
 }

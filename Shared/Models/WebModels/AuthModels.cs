@@ -29,4 +29,10 @@ public class AuthToken
 {
     public string AccessToken { get; set; } = null!;
     public RefreshToken RefreshToken { get; set; } = null!;
+
+    public AuthToken(string accessToken, RefreshToken refreshToken)
+    {
+        AccessToken = accessToken;
+        RefreshToken = refreshToken;
+    }
 }
