@@ -7,3 +7,4 @@ riderModule.iml
 ApiServer/appsettings.Development.json
 *.user
 /.vs
+ProductionLabor.WebUI/appsettings.Development.json
