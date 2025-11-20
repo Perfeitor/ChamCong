@@ -83,7 +83,7 @@ public class AuthService : IAuthService
 
     public async Task<AuthToken?> RotateToken(string refreshTokenId)
     {
-        AuthToken? newToken = new AuthToken(null, null);
+        AuthToken? newToken = null;
         var lsToken = await _dbContext.RefreshTokens.Where(token => token.Token == refreshTokenId && !token.IsInactive)
             .OrderByDescending(token => token.Token)
             .ToListAsync();
@@ -110,10 +110,12 @@ public class AuthService : IAuthService
                 {
                     var errorId = Guid.NewGuid().ToString("N")[..10];
                     token.Revoke("System/Internal", $"Too many active Refresh Token (ErrorId: {errorId})", newRefreshToken.Token);
+                    await _dbContext.SaveChangesAsync();
                 }
             }
+            return newToken;
         }
-        return newToken;
+        return null;
     }
 
     public ClaimsPrincipal? ValidateJwtToken(string token)
@@ -215,6 +217,7 @@ public class AuthService : IAuthService
                 {
                     var errorId = Guid.NewGuid().ToString("N")[..10];
                     oldRefreshToken.Revoke("System/Internal", $"Too many active Refresh Token (ErrorId: {errorId})", refreshToken.Token);
+                    await _dbContext.SaveChangesAsync();
                 }
             }
         }
